@@ -1,10 +1,24 @@
+#Tarea 2
+#Pregunta 2
+
+#¿En qué medida el acceso a computador e internet en el hogar explica las diferencias 
+#en el puntaje global de las pruebas Saber 11, una vez considerado el estrato socioeconómico, en Cundinamarca? 
+
+
+#librerias necesarias para exploración y limpieza
+import pandas as pd
 import numpy as np
-import pandas as pd 
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 #subir archivo con los datos
 df = pd.read_csv("Datos_Cundinamarca.csv")
-df.head()
+print(df.head())
 
+#valores faltantes en todas las columnas
+print(df.isna().sum())
+
+#voy a quedarme solo con las columnas que me sirven para responder mi pregunta 
 columnas_interes = [
     "PUNT_GLOBAL",
     "FAMI_TIENECOMPUTADOR",
@@ -16,8 +30,9 @@ columnas_interes = [
 df = df[columnas_interes]
 
 #verificando que este bien
-df
+print(df)
 
+#analizando como se ven los nulos de los datos para luego quitarlos
 print("Filas antes de limpiar:", len(df))
 
 print("Valores únicos computador:")
@@ -28,6 +43,7 @@ print(df["FAMI_TIENEINTERNET"].unique())
 
 print("Valores únicos estrato:")
 print(df["FAMI_ESTRATOVIVIENDA"].unique())
+
 
 
 #reemplazar strings problemáticos por NaN reales
@@ -60,6 +76,14 @@ print(df_limpio[[
     "FAMI_TIENEINTERNET",
     "FAMI_ESTRATOVIVIENDA"
 ]].isnull().sum())
+
+#Asignamos 1 cuando es "Si" 
+#Asignamos 0 cuando es "No"
+#Para los estratos cambiamos de "estrato 1" a 1 con todos los estratos. 
+
+
+#verificando el tipo de datos que hay
+print(df_limpio.dtypes)
 
 #verificar que datos hay en la base de datos
 print(df_limpio["FAMI_ESTRATOVIVIENDA"].unique())
@@ -100,3 +124,21 @@ print("\nValores únicos finales:")
 print(df_limpio["FAMI_TIENECOMPUTADOR"].unique())
 print(df_limpio["FAMI_TIENEINTERNET"].unique())
 print(df_limpio["FAMI_ESTRATOVIVIENDA"].unique())
+
+
+print(df_limpio)
+
+
+#quitar tildes de los datos
+df_limpio['COLE_MCPIO_UBICACION'] = (
+    df_limpio['COLE_MCPIO_UBICACION']
+    .str.strip()
+    .str.upper()
+    .str.replace('Á','A', regex=False)
+    .str.replace('É','E', regex=False)
+    .str.replace('Í','I', regex=False)
+    .str.replace('Ó','O', regex=False)
+    .str.replace('Ú','U', regex=False)
+)
+
+print(df_limpio['COLE_MCPIO_UBICACION'].value_counts())
