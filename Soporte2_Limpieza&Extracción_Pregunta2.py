@@ -126,9 +126,6 @@ print(df_limpio["FAMI_TIENEINTERNET"].unique())
 print(df_limpio["FAMI_ESTRATOVIVIENDA"].unique())
 
 
-print(df_limpio)
-
-
 #quitar tildes de los datos
 df_limpio['COLE_MCPIO_UBICACION'] = (
     df_limpio['COLE_MCPIO_UBICACION']
@@ -140,9 +137,10 @@ df_limpio['COLE_MCPIO_UBICACION'] = (
     .str.replace('Ó','O', regex=False)
     .str.replace('Ú','U', regex=False)
 )
-
+#verificando que los municipios no estan duplicados
 print(df_limpio['COLE_MCPIO_UBICACION'].value_counts())
 
+#dataframe final para responder la pregunata 2
 print(df_limpio[["FAMI_TIENECOMPUTADOR", 
-                 "FAMI_ESTRATOVIVIENDA", 
+                 "FAMI_ESTRATOVIVIENDA", "COLE_MCPIO_UBICACION", 
                  "FAMI_TIENEINTERNET"]])
