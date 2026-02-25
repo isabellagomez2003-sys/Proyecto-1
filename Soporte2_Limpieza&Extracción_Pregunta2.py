@@ -7,18 +7,19 @@
 
 #librerias necesarias para exploración y limpieza
 import pandas as pd
+
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 #subir archivo con los datos
 df = pd.read_csv("Datos_Cundinamarca.csv")
-print(df.head())
+df.head()
 
 #valores faltantes en todas las columnas
 print(df.isna().sum())
 
-#voy a quedarme solo con las columnas que me sirven para responder mi pregunta 
+#columnas de interes
 columnas_interes = [
     "PUNT_GLOBAL",
     "FAMI_TIENECOMPUTADOR",
@@ -43,7 +44,6 @@ print(df["FAMI_TIENEINTERNET"].unique())
 
 print("Valores únicos estrato:")
 print(df["FAMI_ESTRATOVIVIENDA"].unique())
-
 
 
 #reemplazar strings problemáticos por NaN reales
@@ -142,3 +142,7 @@ df_limpio['COLE_MCPIO_UBICACION'] = (
 )
 
 print(df_limpio['COLE_MCPIO_UBICACION'].value_counts())
+
+print(df_limpio[["FAMI_TIENECOMPUTADOR", 
+                 "FAMI_ESTRATOVIVIENDA", 
+                 "FAMI_TIENEINTERNET"]])
