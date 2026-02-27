@@ -2,9 +2,9 @@
 *Cundinamarca*
 
 Integrantes del grupo: 
-Daniela Solarte
-Diego Galvan 
-Isabella 
+- Daniela Solarte
+- Diego Galvan
+- Isabella 
 
 Usuario final: DPN (Departamento Nacional de Planeación)
 
