@@ -22,6 +22,11 @@ El análisis se enfoca en tres dimensiones clave:
 2. Capital económico del hogar
 3. Acceso a tecnología (brecha digital)
 
+Nuestras Preguntas de Negocio: 
+1. ¿Cómo influye el nivel educativo de los padres en el desarrollo de competencias críticas independientemente del estrato socioeconómico? (Isabella)
+2. ¿En qué medida el acceso a computador e internet en el hogar explica las diferencias en el puntaje global, una vez considerado el estrato socioeconómico? (Daniela)
+3. ¿Qué dimensión del capital familiar tiene mayor poder explicativo sobre el desempeño en Saber 11: cultural o económico? ¿Cómo varía entre áreas evaluadas? (Diego)
+
 Relevancia para el DNP: 
 Este análisis permite identificar:
 
