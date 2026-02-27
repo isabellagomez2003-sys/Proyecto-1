@@ -20,7 +20,7 @@ df["FAMI_ESTRATOVIVIENDA"] = df["FAMI_ESTRATOVIVIENDA"].astype(int)
 
 app.layout = html.Div([
 
-    html.H2("Acceso a TIC y Puntaje Global Saber 11 - Cundinamarca"),
+    html.H2("Analítica de Resultados Saber 11 - Cundinamarca"),
 
     dcc.Tabs([
 
@@ -28,7 +28,7 @@ app.layout = html.Div([
         # =================== PREGUNTA 1 ========================
         # ======================================================
 
-        dcc.Tab(label="pregunta1", children=[
+        dcc.Tab(label="Pregunta1", children=[
 
             html.Br(),
 
@@ -53,7 +53,7 @@ app.layout = html.Div([
         # =================== PREGUNTA 2 ========================
         # ======================================================
 
-        dcc.Tab(label="pregunta 2", children=[
+        dcc.Tab(label="Pregunta 2", children=[
 
             html.Br(),
             html.H4("Análisis para la pregunta 2"),
