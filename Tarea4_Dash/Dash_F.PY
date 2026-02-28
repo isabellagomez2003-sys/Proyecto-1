@@ -302,7 +302,7 @@ app.layout = html.Div([
                 ]),
                 html.Li([
                     "¿Qué dimensión del capital familiar tiene mayor poder explicativo sobre el desempeño en Saber 11: cultural o económico? "
-                    "Entendiendo, Cultural como la educación, y ecónomico, como diversos factores materiales, y estrato ",
+                    "Entendiendo, Cultural como la educación, y ecónomico, como diversos factores materiales, y ",
                     html.Em("(Diego)")
                 ]),
             ]),
