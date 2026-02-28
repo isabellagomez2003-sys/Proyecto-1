@@ -1135,8 +1135,8 @@ def p3_actualizar_modelos(n_clicks, test_size, seed):
         return dash.no_update, dash.no_update, dash.no_update, dash.no_update, f"Error al recalcular modelos: {e}"
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8050, debug=True)
+    app.run(host="0.0.0.0", port=8050, debug=False)
     
