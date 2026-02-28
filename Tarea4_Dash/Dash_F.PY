@@ -1,8 +1,18 @@
 import dash
-from dash import dcc, html, Input, Output
+from dash import dcc, html, Input, Output, State
 import plotly.express as px
 import pandas as pd
 from dash import dash_table
+import numpy as np
+import statsmodels.api as sm
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score
+from sklearn.preprocessing import StandardScaler
+
+import statsmodels.formula.api as smf  # (muévelo aquí)
 
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
@@ -50,7 +60,142 @@ df_mcpio = (
 
 df_mcpio["ubicacion"] = df_mcpio["COLE_MCPIO_UBICACION"] + ", Colombia"
 
+# ======================================================
+# PREGUNTA 3 — Helpers y validación de columnas (antes del layout)
+# ======================================================
 
+# Variables candidatas (solo se mostrarán las que existan)
+P3_CULTURE_CANDIDATES = [
+    ("Educación máxima del hogar", "EDU_MAX_HOGAR"),
+    ("Educación madre", "FAMI_EDUCACIONMADRE"),
+    ("Educación padre", "FAMI_EDUCACIONPADRE"),
+]
+
+P3_ECON_CANDIDATES = [
+    ("Estrato", "FAMI_ESTRATOVIVIENDA"),
+    ("Índice de bienes del hogar", "INDICE_ECON"),
+]
+
+def _p3_existing_options(candidates):
+    """Devuelve options Dash solo con columnas existentes."""
+    opts = []
+    for label, col in candidates:
+        if col in df.columns:
+            opts.append({"label": label, "value": col})
+    return opts
+
+P3_CULTURE_OPTIONS = _p3_existing_options(P3_CULTURE_CANDIDATES)
+P3_ECON_OPTIONS = _p3_existing_options(P3_ECON_CANDIDATES)
+
+# Defaults razonables (si existen)
+P3_DEFAULT_CULTURE = "EDU_MAX_HOGAR" if "EDU_MAX_HOGAR" in df.columns else P3_CULTURE_OPTIONS[0]["value"]
+P3_DEFAULT_ECON = "FAMI_ESTRATOVIVIENDA" if "FAMI_ESTRATOVIVIENDA" in df.columns else P3_ECON_OPTIONS[0]["value"]
+
+def _p3_make_mean_line(df_in, xvar, title, xlabel):
+    g = df_in.groupby(xvar)["PUNT_GLOBAL"].mean().reset_index().sort_values(xvar)
+    fig = px.line(g, x=xvar, y="PUNT_GLOBAL", markers=True, title=title)
+    fig.update_layout(template="simple_white", xaxis_title=xlabel, yaxis_title="Puntaje global promedio")
+    return fig
+
+def _p3_group_edu(series):
+    # Bins del notebook: Bajo (0-2), Medio (3-6), Alto (7-10)
+    s = series.astype(float)
+    return pd.cut(s, bins=[-1, 2, 6, 10], labels=["Bajo (0-2)", "Medio (3-6)", "Alto (7-10)"])
+
+def _p3_group_econ(series, econ_var):
+    s = series.astype(float)
+    if econ_var == "FAMI_ESTRATOVIVIENDA":
+        return pd.cut(s, bins=[0.5, 2.5, 4.5, 6.5], labels=["Bajo (1-2)", "Medio (3-4)", "Alto (5-6)"])
+    # INDICE_ECON típico 0-4: Bajo (0-1), Medio (2-3), Alto (4+)
+    return pd.cut(s, bins=[-1, 1.5, 3.5, 99], labels=["Bajo (0-1)", "Medio (2-3)", "Alto (4+)"])
+
+def _p3_make_heatmaps(df_in, cultura_var, econ_var):
+    df_aux = df_in.copy()
+    df_aux["EDU_G"] = _p3_group_edu(df_aux[cultura_var])
+    df_aux["ECO_G"] = _p3_group_econ(df_aux[econ_var], econ_var)
+
+    hm_mean = df_aux.pivot_table(index="ECO_G", columns="EDU_G", values="PUNT_GLOBAL", aggfunc="mean")
+    hm_n = df_aux.pivot_table(index="ECO_G", columns="EDU_G", values="PUNT_GLOBAL", aggfunc="count")
+
+    fig_mean = px.imshow(hm_mean, text_auto=".1f", aspect="auto",
+                         title="Mapa de calor (promedio): Puntaje por Economía × Cultura")
+    fig_mean.update_layout(template="simple_white", xaxis_title="Cultura (grupo)", yaxis_title="Economía (grupo)")
+
+    fig_n = px.imshow(hm_n, text_auto=True, aspect="auto",
+                      title="Mapa de calor (N observaciones): tamaño muestral por celda")
+    fig_n.update_layout(template="simple_white", xaxis_title="Cultura (grupo)", yaxis_title="Economía (grupo)")
+
+    return fig_mean, fig_n
+
+def _p3_compute_models(df_in, test_size=0.2, random_state=42):
+    # Columnas “core” según tu notebook (cultura + economía + puntaje)
+    required = ["PUNT_GLOBAL", "EDU_MAX_HOGAR", "FAMI_ESTRATOVIVIENDA", "INDICE_ECON"]
+    dfm = df_in.dropna(subset=[c for c in required if c in df_in.columns]).copy()
+
+    X_cul = dfm[["EDU_MAX_HOGAR"]].astype(float)
+    X_eco = dfm[["FAMI_ESTRATOVIVIENDA", "INDICE_ECON"]].astype(float)
+    X_all = dfm[["EDU_MAX_HOGAR", "FAMI_ESTRATOVIVIENDA", "INDICE_ECON"]].astype(float)
+    y = dfm["PUNT_GLOBAL"].astype(float)
+
+    # Split consistente (mismas filas para todos los modelos)
+    idx = np.arange(len(dfm))
+    idx_tr, idx_te = train_test_split(idx, test_size=test_size, random_state=random_state)
+
+    m_cul = LinearRegression().fit(X_cul.iloc[idx_tr], y.iloc[idx_tr])
+    m_eco = LinearRegression().fit(X_eco.iloc[idx_tr], y.iloc[idx_tr])
+    m_all = LinearRegression().fit(X_all.iloc[idx_tr], y.iloc[idx_tr])
+
+    r2_cul = r2_score(y.iloc[idx_te], m_cul.predict(X_cul.iloc[idx_te]))
+    r2_eco = r2_score(y.iloc[idx_te], m_eco.predict(X_eco.iloc[idx_te]))
+    r2_all = r2_score(y.iloc[idx_te], m_all.predict(X_all.iloc[idx_te]))
+
+    tabla_r2 = pd.DataFrame({
+        "Modelo": ["Cultural", "Económico (estrato + bienes)", "Conjunto"],
+        "R2_test": [r2_cul, r2_eco, r2_all]
+    }).round(4)
+
+    delta_cul = r2_all - r2_eco
+    delta_eco = r2_all - r2_cul
+
+    r2_parcial_c = (r2_all - r2_eco) / (1 - r2_eco) if (1 - r2_eco) != 0 else np.nan
+    r2_parcial_e = (r2_all - r2_cul) / (1 - r2_cul) if (1 - r2_cul) != 0 else np.nan
+
+    tabla_marginal = pd.DataFrame({
+        "Métrica": [
+            "ΔR2 (Cultura agregado a Económico)",
+            "ΔR2 (Economía agregado a Cultural)",
+            "R2 parcial Cultura",
+            "R2 parcial Economía",
+        ],
+        "Valor": [delta_cul, delta_eco, r2_parcial_c, r2_parcial_e]
+    }).round(4)
+
+    # Betas estandarizados (modelo conjunto)
+    scX = StandardScaler()
+    scY = StandardScaler()
+    Xz = scX.fit_transform(X_all.values)
+    yz = scY.fit_transform(y.values.reshape(-1, 1)).ravel()
+
+    Xz_tr, Xz_te, yz_tr, yz_te = train_test_split(Xz, yz, test_size=test_size, random_state=random_state)
+    mz = LinearRegression().fit(Xz_tr, yz_tr)
+
+    tabla_beta = pd.DataFrame({
+        "Variable": ["EDU_MAX_HOGAR", "FAMI_ESTRATOVIVIENDA", "INDICE_ECON"],
+        "Coef_estandarizado": mz.coef_
+    }).sort_values("Coef_estandarizado", ascending=False).round(4)
+
+    # VIF (colinealidad)
+    X_vif = sm.add_constant(X_all)
+    tabla_vif = pd.DataFrame({
+        "Variable": X_vif.columns,
+        "VIF": [variance_inflation_factor(X_vif.values, i) for i in range(X_vif.shape[1])]
+    }).round(3)
+
+    # Solapamiento: cuánto EDU_MAX explica estrato (como en tu notebook)
+    reg_aux = LinearRegression().fit(dfm[["EDU_MAX_HOGAR"]].astype(float), dfm["FAMI_ESTRATOVIVIENDA"].astype(float))
+    r2_overlap = reg_aux.score(dfm[["EDU_MAX_HOGAR"]].astype(float), dfm["FAMI_ESTRATOVIVIENDA"].astype(float))
+
+    return tabla_r2, tabla_marginal, tabla_beta, tabla_vif, float(r2_overlap)
 # ==============================
 # LAYOUT
 # ==============================
@@ -416,19 +561,165 @@ app.layout = html.Div([
         # =================== PREGUNTA 3 ========================
         # ======================================================
 
-        dcc.Tab(label="Pregunta 3", children=[
+# ======================================================
+# =================== PREGUNTA 3 ========================
+# ======================================================
+
+dcc.Tab(label="Pregunta 3", children=[
+
+    html.Br(),
+    html.H3("Análisis Pregunta 3"),
+    html.Strong(
+        "¿Qué dimensión del capital familiar (cultural vs económico) tiene mayor poder explicativo "
+        "sobre el desempeño en Saber 11?"
+    ),
+
+    html.Br(),
+    html.P(
+        "La narrativa sigue tres pasos: (1) explorar cada dimensión por separado, "
+        "(2) observar la interacción entre ambas con mapas de calor, "
+        "y (3) comparar modelos predictivos (R² test, ΔR² y R² parcial)."
+    ),
+
+    # -----------------------
+    # 1) Exploración: Cultura
+    # -----------------------
+    html.H4("1) Exploración por dimensión"),
+    html.Div([
+
+        html.Div([
+            html.H5("Capital cultural"),
+            html.P("Selecciona la variable cultural para ver el gradiente promedio del puntaje."),
+            dcc.Dropdown(
+                id="p3-cultura-var",
+                options=P3_CULTURE_OPTIONS,
+                value=P3_DEFAULT_CULTURE,
+                clearable=False
+            ),
+        ], style={"width": "30%", "display": "inline-block", "verticalAlign": "top", "paddingRight": "40px"}),
+
+        html.Div([
+            dcc.Graph(id="p3-graf-cultura")
+        ], style={"width": "65%", "display": "inline-block"}),
+
+    ]),
+
+    html.Br(),
+
+    # -----------------------
+    # 2) Exploración: Economía
+    # -----------------------
+    html.Div([
+
+        html.Div([
+            html.H5("Capital económico"),
+            html.P("Selecciona la variable económica para ver su relación con el puntaje promedio."),
+            dcc.Dropdown(
+                id="p3-econ-var",
+                options=P3_ECON_OPTIONS,
+                value=P3_DEFAULT_ECON,
+                clearable=False
+            ),
+        ], style={"width": "30%", "display": "inline-block", "verticalAlign": "top", "paddingRight": "40px"}),
+
+        html.Div([
+            dcc.Graph(id="p3-graf-economia")
+        ], style={"width": "65%", "display": "inline-block"}),
+
+    ]),
+
+    html.Br(),
+
+    # -----------------------
+    # 3) Heatmaps (2)
+    # -----------------------
+    html.H4("2) Interacción entre dimensiones (mapas de calor)"),
+    html.P(
+        "El primer mapa muestra el puntaje promedio por celda (Economía × Cultura). "
+        "El segundo muestra el tamaño muestral (N) por celda para evitar sobre-interpretar celdas pequeñas."
+    ),
+
+    html.Div([
+        html.Div([dcc.Graph(id="p3-heatmap-mean")], style={"width": "49%", "display": "inline-block"}),
+        html.Div([dcc.Graph(id="p3-heatmap-count")], style={"width": "49%", "display": "inline-block", "float": "right"}),
+    ]),
+
+    html.Br(),
+
+    # -----------------------
+    # 4) Modelos
+    # -----------------------
+    html.H4("3) Modelos comparativos (test)"),
+    html.P("Usamos un split train/test fijo para reportar R² en test y aportes incrementales (ΔR²)."),
+
+    html.Div([
+        html.Div([
+            html.Label("Test size (por defecto 0.20):"),
+            dcc.Slider(
+                id="p3-test-size",
+                min=0.1, max=0.4, step=0.05, value=0.2,
+                marks={0.1: "0.10", 0.2: "0.20", 0.3: "0.30", 0.4: "0.40"}
+            ),
+            html.Br(),
+            html.Label("Random seed (por defecto 42):"),
+            dcc.Input(id="p3-seed", type="number", value=42, step=1),
+            html.Br(), html.Br(),
+            html.Button("Recalcular modelos", id="p3-calc-models", n_clicks=0),
+        ], style={"width": "30%", "display": "inline-block", "verticalAlign": "top", "paddingRight": "40px"}),
+
+        html.Div([
+
+            html.H5("R² en test"),
+            dash_table.DataTable(
+                id="p3-r2-table",
+                columns=[{"name": "Modelo", "id": "Modelo"}, {"name": "R2_test", "id": "R2_test"}],
+                data=[],
+                style_table={"overflowX": "auto"},
+                style_cell={"padding": "8px", "textAlign": "left"},
+            ),
 
             html.Br(),
-            html.H4("Análisis para la pregunta 3"),
+            html.H5("Aporte incremental y R² parcial"),
+            dash_table.DataTable(
+                id="p3-delta-table",
+                columns=[{"name": "Métrica", "id": "Métrica"}, {"name": "Valor", "id": "Valor"}],
+                data=[],
+                style_table={"overflowX": "auto"},
+                style_cell={"padding": "8px", "textAlign": "left"},
+            ),
 
-            dcc.Graph(id="grafico-p3-1"),
-            dcc.Graph(id="grafico-p3-2")
+            html.Br(),
+            html.H5("Importancia relativa (coeficientes estandarizados)"),
+            dash_table.DataTable(
+                id="p3-beta-table",
+                columns=[{"name": "Variable", "id": "Variable"}, {"name": "Coef_estandarizado", "id": "Coef_estandarizado"}],
+                data=[],
+                style_table={"overflowX": "auto"},
+                style_cell={"padding": "8px", "textAlign": "left"},
+            ),
 
-        ])
+            html.Br(),
+            html.H5("Solapamiento (VIF)"),
+            dash_table.DataTable(
+                id="p3-vif-table",
+                columns=[{"name": "Variable", "id": "Variable"}, {"name": "VIF", "id": "VIF"}],
+                data=[],
+                style_table={"overflowX": "auto"},
+                style_cell={"padding": "8px", "textAlign": "left"},
+            ),
+
+            html.Br(),
+            html.P(id="p3-overlap-text", style={"lineHeight": "1.7"}),
+
+        ], style={"width": "65%", "display": "inline-block"}),
+
+    ]),
+
+])
+])
 
     ])
 
-])
 
 # ======================================================
 # CALLBACK PREGUNTA 1
@@ -576,34 +867,76 @@ def actualizar_heatmap(estrato):
 # CALLBACKS PREGUNTA 3 (Ejemplo Base)
 # ======================================================
 
+# ======================================================
+# CALLBACKS PREGUNTA 3
+# ======================================================
+
 @app.callback(
-    Output("grafico-p3-1", "figure"),
-    Output("grafico-p3-2", "figure"),
-    Input("grafico-p3-1", "id")
+    Output("p3-graf-cultura", "figure"),
+    Output("p3-graf-economia", "figure"),
+    Output("p3-heatmap-mean", "figure"),
+    Output("p3-heatmap-count", "figure"),
+    Input("p3-cultura-var", "value"),
+    Input("p3-econ-var", "value")
 )
-def actualizar_pregunta3(_):
+def p3_actualizar_graficos(cultura_var, econ_var):
+    # df limpio asumido; igual filtramos por seguridad mínima
+    df_p3 = df.dropna(subset=["PUNT_GLOBAL", cultura_var, econ_var]).copy()
 
-    fig1 = px.box(
-        df,
-        x="FAMI_ESTRATOVIVIENDA",
-        y="PUNT_GLOBAL",
-        title="Boxplot por Estrato"
+    fig_cul = _p3_make_mean_line(
+        df_p3, cultura_var,
+        title=f"Capital cultural: Puntaje promedio vs {cultura_var}",
+        xlabel="Variable cultural"
     )
 
-    fig2 = px.bar(
-        df.groupby("FAMI_ESTRATOVIVIENDA")["PUNT_GLOBAL"].mean().reset_index(),
-        x="FAMI_ESTRATOVIVIENDA",
-        y="PUNT_GLOBAL",
-        title="Promedio por Estrato"
+    fig_eco = _p3_make_mean_line(
+        df_p3, econ_var,
+        title=f"Capital económico: Puntaje promedio vs {econ_var}",
+        xlabel="Variable económica"
     )
 
-    return fig1, fig2
+    fig_hm_mean, fig_hm_n = _p3_make_heatmaps(df_p3, cultura_var, econ_var)
+
+    return fig_cul, fig_eco, fig_hm_mean, fig_hm_n
+
+
+@app.callback(
+    Output("p3-r2-table", "data"),
+    Output("p3-delta-table", "data"),
+    Output("p3-beta-table", "data"),
+    Output("p3-vif-table", "data"),
+    Output("p3-overlap-text", "children"),
+    Input("p3-calc-models", "n_clicks"),
+    State("p3-test-size", "value"),
+    State("p3-seed", "value")
+)
+def p3_actualizar_modelos(n_clicks, test_size, seed):
+    # Calcula incluso con n_clicks=0 (Dash llama el callback al cargar)
+    try:
+        tabla_r2, tabla_marginal, tabla_beta, tabla_vif, r2_overlap = _p3_compute_models(
+            df, test_size=float(test_size), random_state=int(seed)
+        )
+
+        txt_overlap = (
+            f"Solapamiento cultura→economía: un modelo auxiliar sugiere que EDU_MAX_HOGAR explica "
+            f"aprox. {r2_overlap:.2%} de la variación del estrato. Esto indica que parte de la señal "
+            f"“económica” y “cultural” está estructuralmente solapada (interpretar ΔR² con cuidado)."
+        )
+
+        return (
+            tabla_r2.to_dict("records"),
+            tabla_marginal.to_dict("records"),
+            tabla_beta.to_dict("records"),
+            tabla_vif.to_dict("records"),
+            txt_overlap
+        )
+
+    except Exception as e:
+        # Si algo falla, no revientes el Dash completo:
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, f"Error al recalcular modelos: {e}"
+
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8050, debug=True)
+    app.run(host="0.0.0.0", port=8055, debug=True)
     
