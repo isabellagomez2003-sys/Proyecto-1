@@ -12,7 +12,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
 from sklearn.preprocessing import StandardScaler
 
-import statsmodels.formula.api as smf  # (muévelo aquí)
+import statsmodels.formula.api as smf  
 
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
@@ -23,9 +23,35 @@ server = app.server
 #cargar datos
 
 df = pd.read_csv("df_limpio.csv")
+# ======================================================
+# PREP PREGUNTA 1 (Educación padres vs puntaje, controlando estrato)
+# ======================================================
 
+cols_p1 = ["FAMI_EDU_PADRES_SUM", "PUNT_GLOBAL", "FAMI_ESTRATOVIVIENDA"]
+df_p1 = df[cols_p1].dropna().copy()
+
+# Si tu estrato quedó como int, lo convertimos a etiqueta legible
+# (si ya lo manejas como string tipo "Estrato 1", esto igual funciona)
+df_p1["FAMI_ESTRATOVIVIENDA"] = df_p1["FAMI_ESTRATOVIVIENDA"].astype(int)
+df_p1["ESTRATO_LABEL"] = df_p1["FAMI_ESTRATOVIVIENDA"].apply(lambda x: f"Estrato {x}")
+
+# Categorías como en tu notebook: Baja / Media / Alta
+df_p1["EDU_PADRES_CAT"] = pd.cut(
+    df_p1["FAMI_EDU_PADRES_SUM"],
+    bins=[-1, 6, 12, 20],
+    labels=["Baja", "Media", "Alta"]
+)
+
+# Orden para que salga bien en el eje
+df_p1["EDU_PADRES_CAT"] = pd.Categorical(
+    df_p1["EDU_PADRES_CAT"],
+    categories=["Baja", "Media", "Alta"],
+    ordered=True
+)
+
+estratos_disponibles_p1 = sorted(df_p1["ESTRATO_LABEL"].unique(), key=lambda s: int(s.split()[-1]))
 #modelo de regresión pregunta 2
-import statsmodels.formula.api as smf
+
 
 modelo = smf.ols(
     'PUNT_GLOBAL ~ FAMI_TIENECOMPUTADOR + FAMI_TIENEINTERNET + C(FAMI_ESTRATOVIVIENDA)',
@@ -219,20 +245,76 @@ app.layout = html.Div([
             html.H3("Nuestro Proyecto"),
 
             html.H4("Introducción"),
-            html.P("aqui va la introducción"),
+            html.P(
+                "Este proyecto desarrolla un tablero de analítica de datos en Dash, desplegado en la nube, "
+                "que permite al DNP analizar los determinantes del desempeño académico en las pruebas Saber 11 "
+                "en el departamento de Cundinamarca."
+            ),
 
             html.Br(),
 
             html.H4("Usuario final"),
-            html.P("aqui va la explicación del usuario final"),
+            html.P([html.Strong("DNP"), " (Departamento Nacional de Planeación)"]),
 
             html.Br(),
 
-            html.H4("Integrantes"),
+            html.H4("Integrantes del grupo"),
             html.Ul([
-                html.Li("Daniela"),
-                html.Li("Isa"),
-                html.Li("Diego")
+                html.Li("Daniela Solarte"),
+                html.Li("Diego Galvan"),
+                html.Li("Isabella Gomez"),
+            ]),
+
+            html.Br(),
+
+            html.H4("Objetivo"),
+            html.P("El objetivo es proporcionar evidencia cuantitativa que apoye:"),
+            html.Ul([
+                html.Li("La formulación de políticas públicas educativas"),
+                html.Li("La focalización de inversión social"),
+                html.Li("El diseño de estrategias para reducir brechas educativas territoriales y socioeconómicas"),
+                html.Li("La priorización de intervenciones en capital humano y transformación digital"),
+            ]),
+
+            html.Br(),
+
+            html.H4("Dimensiones analizadas"),
+            html.P("El análisis se enfoca en tres dimensiones clave:"),
+            html.Ul([
+                html.Li("Eduación de Padres/Capital Cultural"),
+                html.Li("Capital económico del hogar, y estrato socioeconómico"),
+                html.Li("Acceso a tecnología (brecha digital)"),
+            ]),
+
+            html.Br(),
+
+            html.H4("Preguntas de negocio"),
+            html.Ul([
+                html.Li([
+                    "¿Cómo influye el nivel educativo de los padres en el desarrollo de competencias críticas "
+                    "independientemente del estrato socioeconómico? ",
+                    html.Em("(Isabella)")
+                ]),
+                html.Li([
+                    "¿En qué medida el acceso a computador e internet en el hogar explica las diferencias en el puntaje global, "
+                    "una vez considerado el estrato socioeconómico? ",
+                    html.Em("(Daniela)")
+                ]),
+                html.Li([
+                    "¿Qué dimensión del capital familiar tiene mayor poder explicativo sobre el desempeño en Saber 11: cultural o económico? "
+                    "Entendiendo, Cultural como la educación, y ecónomico, como diversos factores materiales, y estrato ",
+                    html.Em("(Diego)")
+                ]),
+            ]),
+
+            html.Br(),
+
+            html.H4("Relevancia para el DNP"),
+            html.P("Este análisis permite identificar:"),
+            html.Ul([
+                html.Li("Qué tipo de capital tiene mayor peso estructural"),
+                html.Li("Si distintas áreas responden a diferentes determinantes"),
+                html.Li("Dónde deben focalizarse las intervenciones según tipo de competencia"),
             ]),
 
             html.Br(),
@@ -264,26 +346,110 @@ app.layout = html.Div([
         # =================== PREGUNTA 1 ========================
         # ======================================================
 
-            dcc.Tab(label="Pregunta 1", value="tab-1", children=[
+            
+dcc.Tab(label="Pregunta 1", value="tab-1", children=[
 
-                html.Br(),
+    html.Br(),
+    html.H3("Análisis Pregunta 1"),
 
-                html.Label("Seleccione Estrato:"),
+    html.Strong(
+        "¿Cómo influye el nivel educativo de los padres en el desempeño (Puntaje Global), "
+        "independientemente del estrato socioeconómico?"
+    ),
 
-                dcc.Dropdown(
-                    id="estrato-dropdown",
-                    options=[
-                        {"label": f"Estrato {e}", "value": e}
-                        for e in sorted(df["FAMI_ESTRATOVIVIENDA"].unique())
-                    ],
-                    value=sorted(df["FAMI_ESTRATOVIVIENDA"].unique())[0],
-                    clearable=False
+    html.Br(), html.Br(),
+
+    html.Div([
+        html.Label("Seleccione estratos a incluir:"),
+        dcc.Dropdown(
+            id="p1-estratos",
+            options=[{"label": e, "value": e} for e in estratos_disponibles_p1],
+            value=estratos_disponibles_p1,   # por defecto: todos
+            multi=True,
+            clearable=False
+        )
+    ], style={"width": "60%"}),
+
+    html.Br(),
+
+    html.Div([
+        dcc.Graph(id="p1-violin")
+    ]),
+
+    html.Br(),
+
+    html.Div([
+        dcc.Graph(id="p1-heatmap")
+    ]),
+
+    html.Br(),
+    html.H4("Modelo de regresión (controlando por estrato)"),
+
+    html.P(
+        "Se estima un modelo lineal para aislar el efecto de la educación parental "
+        "sobre el puntaje global, controlando por estrato."
+    ),
+
+    html.Div([
+        # IZQUIERDA: resumen modelo
+        html.Div([
+            html.H4("Resultados del modelo", style={"marginBottom": "15px"}),
+
+            html.Pre(
+                id="p1-reg-summary",
+                style={
+                    "whiteSpace": "pre-wrap",
+                    "fontSize": "14px",
+                    "lineHeight": "1.6",
+                    "backgroundColor": "#f2f2f2",
+                    "padding": "25px",
+                    "borderRadius": "12px",
+                    "boxShadow": "0 4px 12px rgba(0,0,0,0.08)",
+                    "overflowX": "auto",
+                    "border": "1px solid #e0e0e0"
+                }
+            )
+        ], style={"flex": "2"}),
+
+        # DERECHA: fórmula + espacio para explicación
+        html.Div([
+            html.Div(
+                "Puntaje Global = β₀ + β₁(Educación padres) + β₂(Estrato) + ε",
+                style={
+                    "fontSize": "20px",
+                    "fontWeight": "bold",
+                    "textAlign": "center",
+                    "padding": "20px",
+                    "backgroundColor": "white",
+                    "borderRadius": "10px",
+                    "boxShadow": "0 4px 12px rgba(0,0,0,0.05)"
+                }
+            ),
+
+            html.Div([
+                html.H5("Interpretación (por escribir)", style={"marginTop": "15px"}),
+                html.Div(
+                    "• [Espacio para 2–4 bullets clave orientados al DNP: hallazgo principal, "
+                    "matiz importante, implicación de política, y limitación.]",
+                    style={"lineHeight": "1.7"}
                 ),
+            ], style={
+                "backgroundColor": "white",
+                "padding": "20px",
+                "borderRadius": "10px",
+                "boxShadow": "0 4px 12px rgba(0,0,0,0.05)",
+                "marginTop": "20px"
+            })
 
-                dcc.Graph(id="boxplot-puntaje"),
-                dcc.Graph(id="bar-promedios")
+        ], style={"flex": "1", "paddingLeft": "40px"})
 
-            ]),
+    ], style={
+        "display": "flex",
+        "gap": "40px",
+        "alignItems": "flex-start",
+        "marginTop": "30px"
+    }),
+]),
 
         # ======================================================
         # =================== PREGUNTA 2 ========================
@@ -725,49 +891,86 @@ dcc.Tab(label="Pregunta 3", children=[
 # CALLBACK PREGUNTA 1
 # ======================================================
 
+# ======================================================
+# CALLBACK PREGUNTA 1 (Educación padres)
+# ======================================================
+
 @app.callback(
-    Output("boxplot-puntaje", "figure"),
-    Output("bar-promedios", "figure"),
-    Input("estrato-dropdown", "value")
+    Output("p1-violin", "figure"),
+    Output("p1-heatmap", "figure"),
+    Output("p1-reg-summary", "children"),
+    Input("p1-estratos", "value")
 )
-def actualizar_graficos(estrato):
+def actualizar_pregunta1(estratos_sel):
 
-    df_filtrado = df[df["FAMI_ESTRATOVIVIENDA"] == estrato]
+    if not estratos_sel:
+        estratos_sel = estratos_disponibles_p1
 
-    # Boxplot
-    fig_box = px.box(
-        df_filtrado,
-        x="FAMI_TIENEINTERNET",
+    dff = df_p1[df_p1["ESTRATO_LABEL"].isin(estratos_sel)].copy()
+
+    # ---------- 1) Violín (EDU_PADRES_CAT vs puntaje, coloreado por estrato) ----------
+    fig_violin = px.violin(
+        dff,
+        x="EDU_PADRES_CAT",
         y="PUNT_GLOBAL",
-        color="FAMI_TIENECOMPUTADOR",
-        title=f"Distribución del Puntaje Global - Estrato {estrato}",
-        labels={
-            "FAMI_TIENEINTERNET": "Tiene Internet (0=No, 1=Sí)",
-            "FAMI_TIENECOMPUTADOR": "Tiene Computador (0=No, 1=Sí)",
-            "PUNT_GLOBAL": "Puntaje Global"
-        }
+        color="ESTRATO_LABEL",
+        box=True,
+        points=False,
+        category_orders={
+            "EDU_PADRES_CAT": ["Baja", "Media", "Alta"],
+            "ESTRATO_LABEL": estratos_disponibles_p1
+        },
+        title="Distribución del Puntaje Global por educación parental (comparando estratos)"
+    )
+    fig_violin.update_layout(
+        template="simple_white",
+        xaxis_title="Educación de los padres (categoría)",
+        yaxis_title="Puntaje Global",
+        legend_title="Estrato"
     )
 
-    # Promedios
-    df_prom = df_filtrado.groupby(
-        ["FAMI_TIENECOMPUTADOR", "FAMI_TIENEINTERNET"]
-    )["PUNT_GLOBAL"].mean().reset_index()
+    # ---------- 2) Heatmap (promedio + n) ----------
+    tabla_media = dff.pivot_table(
+        index="EDU_PADRES_CAT",
+        columns="ESTRATO_LABEL",
+        values="PUNT_GLOBAL",
+        aggfunc="mean"
+    )
+    tabla_n = dff.pivot_table(
+        index="EDU_PADRES_CAT",
+        columns="ESTRATO_LABEL",
+        values="PUNT_GLOBAL",
+        aggfunc="size"
+    ).fillna(0).astype(int)
 
-    fig_bar = px.bar(
-        df_prom,
-        x="FAMI_TIENECOMPUTADOR",
-        y="PUNT_GLOBAL",
-        color="FAMI_TIENEINTERNET",
-        barmode="group",
-        title="Promedio del Puntaje Global",
-        labels={
-            "FAMI_TIENECOMPUTADOR": "Tiene Computador",
-            "FAMI_TIENEINTERNET": "Tiene Internet",
-            "PUNT_GLOBAL": "Promedio Puntaje"
-        }
+    # Orden consistente
+    tabla_media = tabla_media.reindex(index=["Baja", "Media", "Alta"], columns=estratos_disponibles_p1)
+    tabla_n = tabla_n.reindex(index=["Baja", "Media", "Alta"], columns=estratos_disponibles_p1)
+
+    labels = tabla_media.round(1).astype(str) + "<br>(n=" + tabla_n.astype(str) + ")"
+
+    fig_heat = px.imshow(
+        tabla_media,
+        text_auto=False,
+        aspect="auto",
+        title="Promedio de Puntaje Global por educación parental y estrato"
+    )
+    fig_heat.update_traces(text=labels, texttemplate="%{text}")
+    fig_heat.update_layout(
+        template="simple_white",
+        xaxis_title="Estrato socioeconómico",
+        yaxis_title="Educación de los padres (categoría)",
+        coloraxis_colorbar=dict(title="Promedio Puntaje")
     )
 
-    return fig_box, fig_bar
+    # ---------- 3) Regresión ----------
+    # PUNT_GLOBAL ~ FAMI_EDU_PADRES_SUM + C(estrato)
+    modelo1 = smf.ols(
+        "PUNT_GLOBAL ~ FAMI_EDU_PADRES_SUM + C(ESTRATO_LABEL)",
+        data=dff
+    ).fit()
+
+    return fig_violin, fig_heat, modelo1.summary().as_text()
 
 # ==============================
 # HISTOGRAMA MEJORADO
@@ -862,10 +1065,6 @@ def actualizar_heatmap(estrato):
     )
 
     return f"Mapa de Calor: Puntaje Global - Estrato {estrato}", fig
-
-# ======================================================
-# CALLBACKS PREGUNTA 3 (Ejemplo Base)
-# ======================================================
 
 # ======================================================
 # CALLBACKS PREGUNTA 3
